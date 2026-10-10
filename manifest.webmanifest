@@ -1,0 +1,17 @@
+{
+  "name": "LeiTech - Gestão de Leite",
+  "short_name": "LeiTech",
+  "description": "Sistema de gestão para produtores de leite.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#2e7d32",
+  "theme_color": "#2e7d32",
+  "icons": [
+    {
+      "src": "logo.png..png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

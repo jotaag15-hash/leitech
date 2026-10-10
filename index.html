@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeiTech - Gestão de Produtores de Leite</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+</head>
+
+<body>
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <div id="app-auth-modal" class="modal-overlay active">
+        <div class="modal-card auth-card">
+            <div class="modal-header">
+                <h3><i data-lucide="lock" class="inline-icon"></i> Acesso ao Sistema</h3>
+            </div>
+
+            <form id="app-auth-form" onsubmit="signInToApp(event)">
+                <div class="form-group">
+                    <label>E-mail</label>
+                    <input type="email" id="auth-email" class="form-control" placeholder="seu@email.com" autocomplete="username" required>
+                </div>
+                <div class="form-group">
+                    <label>Senha</label>
+                    <input type="password" id="auth-password" class="form-control" placeholder="Digite sua senha" autocomplete="current-password" required>
+                </div>
+                <p class="auth-hint">Acesso somente para usuários convidados pelo administrador.</p>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Entrar</button>
+                </div>
+            </form>
+            <form id="auth-password-update-form" onsubmit="updateAccountPassword(event)" hidden>
+                <div class="form-group">
+                    <label>Nova senha</label>
+                    <input type="password" id="auth-new-password" class="form-control" autocomplete="new-password" minlength="8" required>
+                </div>
+                <div class="form-group">
+                    <label>Confirme a nova senha</label>
+                    <input type="password" id="auth-confirm-password" class="form-control" autocomplete="new-password" minlength="8" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Salvar senha</button>
+                </div>
+            </form>
+            <button type="button" id="auth-reset-password" class="btn btn-outline btn-block" onclick="requestPasswordReset()">
+                Esqueci minha senha
+            </button>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Mobile Overlay -->
+        <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="toggleSidebar()"></div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar" id="app-sidebar">
+            <div class="logo-container">
+                <img src="logo.png..png" alt="LeiTech Logo" class="app-logo">
+            </div>
+            <nav>
+                <ul class="nav-menu">
+                    <li class="nav-item active" data-section="dashboard">
+                        <i data-lucide="layout-dashboard"></i>
+                        <span>Página Inicial</span>
+                    </li>
+                    <li class="nav-item" data-section="producers">
+                        <i data-lucide="users"></i>
+                        <span>Produtores</span>
+                    </li>
+                    <li class="nav-item" id="dairy-nav-item" data-section="dairy">
+                        <i data-lucide="factory"></i>
+                        <span>Laticínio</span>
+                    </li>
+                    <li class="nav-item" data-section="deliveries">
+                        <i data-lucide="container"></i>
+                        <span>Entregas</span>
+                    </li>
+                    <li class="nav-item" data-section="reports">
+                        <i data-lucide="file-text"></i>
+                        <span>Relatórios</span>
+                    </li>
+                    <li class="nav-item" id="settings-nav-item" data-section="settings">
+                        <i data-lucide="settings"></i>
+                        <span>Backup & Configs</span>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header>
+                <div class="header-left">
+                    <button class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="Abrir Menu">
+                        <i data-lucide="menu"></i>
+                    </button>
+                    <div class="header-title">
+                        <h1 id="page-title">Página Inicial</h1>
+                        <p id="page-subtitle">Bem-vindo ao sistema LeiTech</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-outline" onclick="logoutApp()">
+                        <i data-lucide="log-out"></i> Sair
+                    </button>
+                    <button class="btn btn-primary" onclick="showSection('deliveries')">
+                        <i data-lucide="plus"></i> Nova Entrega
+                    </button>
+                </div>
+            </header>
+
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="section active">
+                <!-- Stats Overview -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-label">Total Hoje</span>
+                            <div class="stat-icon-wrap stat-icon-gold">
+                                <i data-lucide="sun"></i>
+                            </div>
+                        </div>
+                        <span class="stat-value" id="stats-today">0,0 L</span>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-label">Total Quinzena</span>
+                            <div class="stat-icon-wrap stat-icon-amber">
+                                <i data-lucide="calendar-range"></i>
+                            </div>
+                        </div>
+                        <span class="stat-value" id="stats-fortnight">0,0 L</span>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-label">Total Mês</span>
+                            <div class="stat-icon-wrap stat-icon-brown">
+                                <i data-lucide="calendar"></i>
+                            </div>
+                        </div>
+                        <span class="stat-value" id="stats-month">0,0 L</span>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-label">Produtores Ativos</span>
+                            <div class="stat-icon-wrap stat-icon-green">
+                                <i data-lucide="users"></i>
+                            </div>
+                        </div>
+                        <span class="stat-value" id="stats-producers">0</span>
+                    </div>
+                </div>
+
+                <!-- Recent Deliveries Table -->
+                <div class="card">
+                    <div class="card-header-flex">
+                        <div class="card-title-wrap">
+                            <h3><i data-lucide="clock" class="inline-icon"></i> Entregas Recentes</h3>
+                            <span class="badge-chip">Últimos registros</span>
+                        </div>
+                        <button class="btn btn-sm btn-outline" onclick="showSection('deliveries')">
+                            <i data-lucide="list"></i> Ver Histórico Completo
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table id="recent-deliveries-table">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Produtor</th>
+                                    <th style="text-align: right;">Quantidade</th>
+                                    <th style="text-align: right;">Valor Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Dynamic Content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Producers Section -->
+            <section id="producers" class="section">
+                <div class="card">
+                    <div class="card-title-wrap" style="margin-bottom: 1.2rem;">
+                        <h3><i data-lucide="user-plus" class="inline-icon"></i> Cadastrar Novo Produtor</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Preencha os dados do produtor para incluí-lo na lista de entregas.</p>
+                    </div>
+                    <form id="producer-form" class="organized-form-grid">
+                        <div class="form-group">
+                            <label>Nome do Produtor *</label>
+                            <input type="text" id="prod-name" class="form-control" placeholder="Ex: João Silva" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Nome da Propriedade</label>
+                            <input type="text" id="prod-property" class="form-control" placeholder="Ex: Fazenda Santa Fé">
+                        </div>
+                        <div class="form-group">
+                            <label>WhatsApp / Celular</label>
+                            <div class="phone-input-wrap">
+                                <i data-lucide="phone" class="phone-icon"></i>
+                                <input type="tel" id="prod-phone" class="form-control" placeholder="(00) 90000-0000">
+                            </div>
+                        </div>
+                        <div class="form-group form-group-action">
+                            <button type="submit" class="btn btn-primary btn-block">
+                                <i data-lucide="save"></i> Salvar Produtor
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="card-header-flex">
+                        <div class="card-title-wrap">
+                            <h3><i data-lucide="users" class="inline-icon"></i> Lista de Produtores</h3>
+                            <span class="badge-count" id="producers-count-badge">0 cadastrados</span>
+                        </div>
+                        <div class="search-box">
+                            <i data-lucide="search" class="search-icon"></i>
+                            <input type="text" id="search-producers" class="form-control search-input" placeholder="Buscar por nome, propriedade ou telefone..." oninput="filterProducers()">
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Propriedade</th>
+                                    <th>WhatsApp</th>
+                                    <th style="text-align: right;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="producers-list">
+                                <!-- Dynamic Content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Dairy Section -->
+            <section id="dairy" class="section">
+                <div class="card">
+                    <div class="card-title-wrap" style="margin-bottom: 1.2rem;">
+                        <h3><i data-lucide="factory" class="inline-icon"></i> Cadastrar Laticínio Responsável</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">O nome cadastrado será exibido nos relatórios e comprovantes das entregas.</p>
+                    </div>
+                    <form id="dairy-form" class="organized-form-grid">
+                        <div class="form-group">
+                            <label>Nome do Laticínio *</label>
+                            <input type="text" id="dairy-name" class="form-control" placeholder="Ex: LATICÍNIO LEITE BOM" required>
+                        </div>
+                        <div class="form-group form-group-action">
+                            <button type="submit" class="btn btn-primary btn-block">
+                                <i data-lucide="save"></i> Salvar Laticínio
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Deliveries Section -->
+            <section id="deliveries" class="section">
+                <div class="card">
+                    <div class="card-title-wrap" style="margin-bottom: 1.2rem;">
+                        <h3><i data-lucide="plus-circle" class="inline-icon"></i> Registrar Entrega de Leite</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Lance a coleta diária informando o produtor e a quantidade em litros.</p>
+                    </div>
+                    <form id="delivery-form" class="organized-form-grid delivery-grid">
+                        <div class="form-group">
+                            <label>Produtor *</label>
+                            <select id="delivery-producer" class="form-control" required>
+                                <option value="">Selecione um produtor</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Data *</label>
+                            <input type="date" id="delivery-date" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Quantidade (L) *</label>
+                            <input type="number" step="0.01" min="0" id="delivery-liters" class="form-control" placeholder="0,00" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Valor/Litro (R$) *</label>
+                            <input type="number" step="0.01" min="0" id="delivery-price" class="form-control" placeholder="0,00" required>
+                        </div>
+                        <div class="form-group form-group-action">
+                            <button type="submit" class="btn btn-primary btn-block">
+                                <i data-lucide="check"></i> Registrar Coleta
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="card-header-flex">
+                        <div class="card-title-wrap">
+                            <h3><i data-lucide="list" class="inline-icon"></i> Histórico de Entregas</h3>
+                            <span class="badge-count" id="deliveries-count-badge">0 registros</span>
+                        </div>
+                        <div class="search-box">
+                            <i data-lucide="search" class="search-icon"></i>
+                            <input type="text" id="search-deliveries" class="form-control search-input" placeholder="Buscar por produtor ou data..." oninput="filterDeliveries()">
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Produtor</th>
+                                    <th style="text-align: right;">Quantidade</th>
+                                    <th style="text-align: right;">Preço/L</th>
+                                    <th style="text-align: right;">Total (R$)</th>
+                                    <th style="text-align: right;">Comprovante / Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="deliveries-history">
+                                <!-- Dynamic Content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports Section -->
+            <section id="reports" class="section">
+                <div class="card no-print">
+                    <div class="card-title-wrap" style="margin-bottom: 1.2rem;">
+                        <h3><i data-lucide="filter" class="inline-icon"></i> Gerar Relatórios</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Filtre por período ou por produtor para emitir extratos e balanços.</p>
+                    </div>
+                    <div class="organized-form-grid report-filters-grid">
+                        <div class="form-group">
+                            <label>Tipo de Relatório</label>
+                            <select id="report-type" class="form-control" onchange="toggleReportFilters()">
+                                <option value="daily">Diário</option>
+                                <option value="fortnightly">Quinzenal</option>
+                                <option value="monthly">Mensal</option>
+                                <option value="all-producers">Todos os Produtores</option>
+                                <option value="individual">Individual por Produtor</option>
+                            </select>
+                        </div>
+                        <div id="filter-producer" class="form-group" style="display: none;">
+                            <label>Produtor</label>
+                            <select id="report-producer" class="form-control">
+                                <!-- Dynamic -->
+                            </select>
+                        </div>
+                        <div id="filter-date" class="form-group">
+                            <label>Data / Mês de Referência</label>
+                            <input type="month" id="report-month" class="form-control">
+                            <input type="date" id="report-date" class="form-control" style="display: none;">
+                        </div>
+                        <div class="form-group form-group-action">
+                            <button class="btn btn-primary btn-block" onclick="generateReport()">
+                                <i data-lucide="search"></i> Gerar Relatório
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="report-output" class="card">
+                    <div class="report-header">
+                        <div class="report-header-content">
+                            <div class="report-heading">
+                                <p id="report-dairy" class="report-dairy" hidden></p>
+                                <h2 id="report-title">Relatório de Entregas</h2>
+                                <p id="report-subtitle">Selecione os filtros acima</p>
+                            </div>
+                            <img class="report-logo" src="logo.png..png" alt="Logotipo LeiTech" data-html2canvas-ignore="true">
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table id="report-table">
+                            <thead>
+                                <tr id="report-table-head">
+                                    <!-- Dynamic -->
+                                </tr>
+                            </thead>
+                            <tbody id="report-table-body">
+                                <!-- Dynamic -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="report-summary" id="report-summary">
+                        <!-- Dynamic -->
+                    </div>
+                    <div class="report-actions no-print">
+                        <button class="btn btn-secondary" onclick="exportToJPG()" style="background: var(--secondary); color: white;">
+                            <i data-lucide="image"></i> Baixar JPG (A4)
+                        </button>
+                        <button class="btn btn-whatsapp" onclick="shareReportByWhatsApp()">
+                            <i data-lucide="message-circle"></i> Enviar via WhatsApp
+                        </button>
+                        <button class="btn btn-primary" onclick="downloadReportPdf()">
+                            <i data-lucide="download"></i> Baixar PDF (A4)
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings & Backup Section -->
+            <section id="settings" class="section">
+                <div class="card">
+                    <div class="card-title-wrap" style="margin-bottom: 1.2rem;">
+                        <h3><i data-lucide="database" class="inline-icon"></i> Backup e Restauração de Dados</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">
+                            Faça cópias de segurança de todos os seus produtores e entregas para não perder informações, ou transfira para outro dispositivo.
+                        </p>
+                    </div>
+
+                    <div class="settings-grid">
+                        <div class="settings-card">
+                            <div class="settings-card-icon">
+                                <i data-lucide="download"></i>
+                            </div>
+                            <h4>Exportar Backup</h4>
+                            <p>Baixe um arquivo contendo todos os produtores, histórico de entregas e configurações.</p>
+                            <button class="btn btn-primary btn-block" onclick="exportBackupJSON()">
+                                <i data-lucide="download"></i> Baixar Backup (.json)
+                            </button>
+                        </div>
+
+                        <div class="settings-card">
+                            <div class="settings-card-icon">
+                                <i data-lucide="upload"></i>
+                            </div>
+                            <h4>Restaurar Backup</h4>
+                            <p>Selecione um arquivo de backup (.json) previamente salvo para restaurar os dados.</p>
+                            <input type="file" id="backup-file-input" accept=".json" style="display: none;" onchange="importBackupJSON(event)">
+                            <button class="btn btn-secondary btn-block" style="background: var(--secondary); color: white;" onclick="document.getElementById('backup-file-input').click()">
+                                <i data-lucide="upload"></i> Selecionar Arquivo (.json)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title-wrap" style="margin-bottom: 1.2rem;">
+                        <h3><i data-lucide="sliders" class="inline-icon"></i> Preferências Gerais</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Configure parâmetros padrão para agilizar o preenchimento diário.</p>
+                    </div>
+                    <form id="preferences-form" onsubmit="savePreferences(event)" class="organized-form-grid preferences-grid">
+                        <div class="form-group">
+                            <label>Preço Padrão do Leite (R$/Litro)</label>
+                            <input type="number" step="0.01" min="0" id="pref-default-price" class="form-control" placeholder="Ex: 2.50">
+                        </div>
+                        <div class="form-group form-group-action">
+                            <button type="submit" class="btn btn-primary btn-block">
+                                <i data-lucide="check"></i> Salvar Preferências
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card danger-card">
+                    <h3><i data-lucide="alert-triangle" class="inline-icon" style="color: #e74c3c;"></i> Zona de Perigo</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 1rem;">
+                        Apagar todos os registros do sistema. Esta ação não pode ser desfeita caso não tenha backup.
+                    </p>
+                    <button class="btn btn-danger" onclick="clearAllData()">
+                        <i data-lucide="trash-2"></i> Limpar Todos os Dados do Sistema
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Edit Producer Modal -->
+    <div id="edit-producer-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i data-lucide="edit" class="inline-icon"></i> Editar Produtor</h3>
+                <button class="modal-close" onclick="closeModal('edit-producer-modal')">&times;</button>
+            </div>
+            <form id="edit-producer-form" onsubmit="saveEditProducer(event)">
+                <input type="hidden" id="edit-prod-id">
+                <div class="form-group">
+                    <label>Nome do Produtor *</label>
+                    <input type="text" id="edit-prod-name" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Nome da Propriedade</label>
+                    <input type="text" id="edit-prod-property" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>WhatsApp / Celular</label>
+                    <input type="tel" id="edit-prod-phone" class="form-control" placeholder="(00) 90000-0000">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('edit-producer-modal')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Delivery Modal -->
+    <div id="edit-delivery-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i data-lucide="edit" class="inline-icon"></i> Editar Entrega</h3>
+                <button class="modal-close" onclick="closeModal('edit-delivery-modal')">&times;</button>
+            </div>
+            <form id="edit-delivery-form" onsubmit="saveEditDelivery(event)">
+                <input type="hidden" id="edit-delivery-id">
+                <div class="form-group">
+                    <label>Produtor *</label>
+                    <select id="edit-delivery-producer" class="form-control" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Data *</label>
+                    <input type="date" id="edit-delivery-date" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Quantidade (Litros) *</label>
+                    <input type="number" step="0.01" min="0" id="edit-delivery-liters" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Preço por Litro (R$) *</label>
+                    <input type="number" step="0.01" min="0" id="edit-delivery-price" class="form-control" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('edit-delivery-modal')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- WhatsApp Receipt & Format Choice Modal -->
+    <div id="whatsapp-receipt-modal" class="modal-overlay">
+        <div class="modal-card modal-receipt">
+            <div class="modal-header">
+                <h3><i data-lucide="share-2" class="inline-icon" style="color: #25D366;"></i> Comprovante para WhatsApp</h3>
+                <button class="modal-close" onclick="closeModal('whatsapp-receipt-modal')">&times;</button>
+            </div>
+
+            <!-- Phone Number Input -->
+            <div class="form-group">
+                <label>WhatsApp / Número do Produtor</label>
+                <div class="phone-input-wrap">
+                    <i data-lucide="phone" class="phone-icon"></i>
+                    <input type="tel" id="receipt-phone" class="form-control" placeholder="DDD + Número (Ex: 11999998888)">
+                </div>
+            </div>
+
+            <!-- Format Selector Segment -->
+            <div class="form-group">
+                <label>Escolha o formato do comprovante:</label>
+                <div class="format-selector">
+                    <button type="button" class="format-btn active" id="btn-fmt-text" onclick="setReceiptFormat('text')">
+                        <i data-lucide="message-square"></i>
+                        <span>Mensagem (Texto)</span>
+                    </button>
+                    <button type="button" class="format-btn" id="btn-fmt-image" onclick="setReceiptFormat('image')">
+                        <i data-lucide="image"></i>
+                        <span>Imagem (JPG)</span>
+                    </button>
+                    <button type="button" class="format-btn" id="btn-fmt-pdf" onclick="setReceiptFormat('pdf')">
+                        <i data-lucide="file-text"></i>
+                        <span>Documento (PDF)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Preview: Text Mode -->
+            <div id="receipt-text-container" class="receipt-preview-pane active">
+                <div class="form-group">
+                    <label>Texto da Mensagem (Editável)</label>
+                    <textarea id="receipt-message" class="form-control receipt-textarea" rows="7"></textarea>
+                </div>
+            </div>
+
+            <!-- Preview: Visual Ticket Mode (for JPG & PDF generation and live display) -->
+            <div id="receipt-visual-container" class="receipt-preview-pane">
+                <div class="receipt-ticket-wrapper">
+                    <div id="receipt-ticket" class="receipt-ticket">
+                        <div class="ticket-header">
+                            <div class="ticket-brand">
+                                <img src="logo.png..png" alt="Logo" class="ticket-logo">
+                                <div>
+                                    <h4 id="ticket-company">LeiTech</h4>
+                                    <span id="ticket-badge" class="ticket-badge">COMPROVANTE DE ENTREGA</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ticket-divider"></div>
+                        <div class="ticket-body" id="ticket-body">
+                            <!-- Dynamic Content -->
+                        </div>
+                        <div class="ticket-divider"></div>
+                        <div class="ticket-total-box" id="ticket-total-box">
+                            <span class="total-label">TOTAL A RECEBER</span>
+                            <span class="total-value" id="ticket-total-value">R$ 0,00</span>
+                        </div>
+                        <div class="ticket-footer">
+                            <p>Sistema LeiTech • Gestão de Leite</p>
+                            <span id="ticket-timestamp"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Action Buttons -->
+            <div class="modal-actions receipt-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('whatsapp-receipt-modal')">Fechar</button>
+                
+                <!-- Action Button for Direct Download (JPG or PDF) -->
+                <button type="button" class="btn btn-secondary" id="btn-receipt-download" style="display: none;" onclick="downloadReceiptFile()">
+                    <i data-lucide="download"></i> Baixar Arquivo
+                </button>
+
+                <!-- Primary WhatsApp Action -->
+                <button type="button" class="btn btn-whatsapp" id="btn-receipt-send" onclick="sendSelectedReceipt()">
+                    <i data-lucide="send"></i> <span id="btn-send-label">Enviar via WhatsApp</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Init Lucide Icons
+        lucide.createIcons();
+
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW Registered', reg))
+                    .catch(err => console.log('SW Failed', err));
+            });
+        }
+    </script>
+</body>
+
+</html>
