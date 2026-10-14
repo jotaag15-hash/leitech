@@ -21,45 +21,6 @@
     <!-- Toast Notification Container -->
     <div id="toast-container" class="toast-container"></div>
 
-    <div id="app-auth-modal" class="modal-overlay active">
-        <div class="modal-card auth-card">
-            <div class="modal-header">
-                <h3><i data-lucide="lock" class="inline-icon"></i> Acesso ao Sistema</h3>
-            </div>
-
-            <form id="app-auth-form" onsubmit="signInToApp(event)">
-                <div class="form-group">
-                    <label>E-mail</label>
-                    <input type="email" id="auth-email" class="form-control" placeholder="seu@email.com" autocomplete="username" required>
-                </div>
-                <div class="form-group">
-                    <label>Senha</label>
-                    <input type="password" id="auth-password" class="form-control" placeholder="Digite sua senha" autocomplete="current-password" required>
-                </div>
-                <p class="auth-hint">Acesso somente para usuários convidados pelo administrador.</p>
-                <div class="modal-actions">
-                    <button type="submit" class="btn btn-primary">Entrar</button>
-                </div>
-            </form>
-            <form id="auth-password-update-form" onsubmit="updateAccountPassword(event)" hidden>
-                <div class="form-group">
-                    <label>Nova senha</label>
-                    <input type="password" id="auth-new-password" class="form-control" autocomplete="new-password" minlength="8" required>
-                </div>
-                <div class="form-group">
-                    <label>Confirme a nova senha</label>
-                    <input type="password" id="auth-confirm-password" class="form-control" autocomplete="new-password" minlength="8" required>
-                </div>
-                <div class="modal-actions">
-                    <button type="submit" class="btn btn-primary">Salvar senha</button>
-                </div>
-            </form>
-            <button type="button" id="auth-reset-password" class="btn btn-outline btn-block" onclick="requestPasswordReset()">
-                Esqueci minha senha
-            </button>
-        </div>
-    </div>
-
     <div class="app-container">
         <!-- Mobile Overlay -->
         <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="toggleSidebar()"></div>
@@ -112,9 +73,6 @@
                     </div>
                 </div>
                 <div class="header-actions">
-                    <button class="btn btn-outline" onclick="logoutApp()">
-                        <i data-lucide="log-out"></i> Sair
-                    </button>
                     <button class="btn btn-primary" onclick="showSection('deliveries')">
                         <i data-lucide="plus"></i> Nova Entrega
                     </button>

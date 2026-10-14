@@ -4,10 +4,7 @@
 // ==========================================
 
 let supabaseClient;
-let currentUser = null;
-let loadedUserId = null;
-let loadingUserId = null;
-let isAdmin = false;
+let isAdmin = true;
 let sharedDataChannel = null;
 let sharedDataRefreshTimer = null;
 let producers = [];
@@ -28,7 +25,6 @@ function normalizeSettings(value = {}) {
 }
 
 let settings = normalizeSettings();
-let appUnlocked = false;
 
 // Receipt State
 let currentReceiptFormat = 'text'; // 'text' | 'image' | 'pdf'
@@ -57,7 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Start App Directly
     setupEventListeners();
-    setupAuthenticationForms();
     initializeAppAccess();
 });
 
@@ -250,21 +245,47 @@ function setupAuthenticationForms() {
 
 function showPasswordUpdateForm() {
     const loginForm = document.getElementById('app-auth-form');
+    const changeForm = document.getElementById('auth-password-change-form');
     const updateForm = document.getElementById('auth-password-update-form');
+    const changeButton = document.getElementById('auth-change-password');
     const resetButton = document.getElementById('auth-reset-password');
     if (loginForm) loginForm.hidden = true;
+    if (changeForm) changeForm.hidden = true;
     if (updateForm) updateForm.hidden = false;
+    if (changeButton) changeButton.hidden = true;
     if (resetButton) resetButton.hidden = true;
     const title = document.querySelector('#app-auth-modal .modal-header h3');
     if (title) title.innerText = 'Definir nova senha';
 }
 
+function showPasswordChangeForm() {
+    const loginForm = document.getElementById('app-auth-form');
+    const changeForm = document.getElementById('auth-password-change-form');
+    const updateForm = document.getElementById('auth-password-update-form');
+    const changeButton = document.getElementById('auth-change-password');
+    const resetButton = document.getElementById('auth-reset-password');
+    if (loginForm) loginForm.hidden = true;
+    if (changeForm) changeForm.hidden = false;
+    if (updateForm) updateForm.hidden = true;
+    if (changeButton) changeButton.hidden = true;
+    if (resetButton) resetButton.hidden = true;
+    const email = document.getElementById('auth-email')?.value.trim().toLowerCase();
+    const changeEmail = document.getElementById('auth-change-email');
+    if (changeEmail) changeEmail.value = email || '';
+    const title = document.querySelector('#app-auth-modal .modal-header h3');
+    if (title) title.innerText = 'Trocar senha';
+}
+
 function showSignInForm() {
     const loginForm = document.getElementById('app-auth-form');
+    const changeForm = document.getElementById('auth-password-change-form');
     const updateForm = document.getElementById('auth-password-update-form');
+    const changeButton = document.getElementById('auth-change-password');
     const resetButton = document.getElementById('auth-reset-password');
     if (loginForm) loginForm.hidden = false;
+    if (changeForm) changeForm.hidden = true;
     if (updateForm) updateForm.hidden = true;
+    if (changeButton) changeButton.hidden = false;
     if (resetButton) resetButton.hidden = false;
     const title = document.querySelector('#app-auth-modal .modal-header h3');
     if (title) title.innerText = 'Acesso ao Sistema';
@@ -325,6 +346,60 @@ async function requestPasswordReset() {
     }
 }
 
+async function changeAccountPassword(event) {
+    event.preventDefault();
+    const config = window.LEITECH_SUPABASE_CONFIG;
+    const apiKey = config?.publishableKey || config?.anonKey;
+    if (!config?.url || !apiKey || !window.supabase?.createClient) {
+        showToast('O Supabase não está conectado. Verifique a configuração e a conexão com a internet.', 'error');
+        return;
+    }
+
+    const email = document.getElementById('auth-change-email').value.trim().toLowerCase();
+    const currentPassword = document.getElementById('auth-current-password').value;
+    const password = document.getElementById('auth-change-new-password').value;
+    const confirmation = document.getElementById('auth-change-confirm-password').value;
+    if (password.length < 8) {
+        showToast('A senha deve ter pelo menos 8 caracteres.', 'error');
+        return;
+    }
+    if (password !== confirmation) {
+        showToast('As senhas não coincidem.', 'error');
+        return;
+    }
+
+    try {
+        const passwordClient = window.supabase.createClient(config.url, apiKey, {
+            auth: {
+                autoRefreshToken: false,
+                detectSessionInUrl: false,
+                persistSession: false
+            }
+        });
+        const { error: signInError } = await passwordClient.auth.signInWithPassword({
+            email,
+            password: currentPassword
+        });
+        if (signInError) {
+            showToast(`Não foi possível validar a senha atual: ${signInError.message}`, 'error');
+            return;
+        }
+
+        const { error } = await passwordClient.auth.updateUser({ password });
+        if (error) {
+            showToast(`Não foi possível atualizar a senha: ${error.message}`, 'error');
+            return;
+        }
+
+        document.getElementById('auth-password-change-form').reset();
+        document.getElementById('auth-email').value = email;
+        showSignInForm();
+        showToast('Senha atualizada. Entre com sua nova senha.', 'success');
+    } catch (error) {
+        showToast(`Não foi possível atualizar a senha: ${error.message}`, 'error');
+    }
+}
+
 async function updateAccountPassword(event) {
     event.preventDefault();
     if (!supabaseClient) {
@@ -361,95 +436,28 @@ async function updateAccountPassword(event) {
 
 async function initializeAppAccess() {
     const config = window.LEITECH_SUPABASE_CONFIG;
-    if (!config?.url || !config?.publishableKey || !window.supabase?.createClient) {
+    const apiKey = config?.publishableKey || config?.anonKey;
+    if (!config?.url || !apiKey || !window.supabase?.createClient) {
         showToast('Configuração Supabase ausente. Verifique supabase-config.js e a conexão.', 'error');
         return;
     }
 
-    supabaseClient = window.supabase.createClient(config.url, config.publishableKey, {
+    supabaseClient = window.supabase.createClient(config.url, apiKey, {
         auth: {
-            autoRefreshToken: true,
-            detectSessionInUrl: true,
-            persistSession: true,
-            flowType: 'pkce'
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+            persistSession: false
         }
     });
-
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-        setTimeout(() => handleAuthSession(event, session), 0);
-    });
-
-    const { data, error } = await supabaseClient.auth.getSession();
-    if (error) {
-        showToast(`Erro ao recuperar a sessão: ${error.message}`, 'error');
-        openModal('app-auth-modal');
-        return;
-    }
-    await handleAuthSession('INITIAL_SESSION', data.session);
-}
-
-async function handleAuthSession(event, session) {
-    currentUser = session?.user || null;
-    appUnlocked = Boolean(currentUser);
-
-    if (!currentUser) {
-        if (sharedDataChannel) {
-            await supabaseClient.removeChannel(sharedDataChannel);
-            sharedDataChannel = null;
-        }
-        window.removeEventListener('focus', refreshSharedData);
-        loadedUserId = null;
-        loadingUserId = null;
-        isAdmin = false;
-        const settingsNav = document.getElementById('settings-nav-item');
-        if (settingsNav) settingsNav.hidden = true;
-        const dairyNav = document.getElementById('dairy-nav-item');
-        if (dairyNav) dairyNav.hidden = true;
-        producers = [];
-        deliveries = [];
-        settings = normalizeSettings();
-        updateDashboard();
-        renderProducers();
-        renderDeliveries();
-        populateSelects();
-        showSignInForm();
-        openModal('app-auth-modal');
-        return;
-    }
-
-    closeModal('app-auth-modal');
-    if (event === 'PASSWORD_RECOVERY' ||
-        new URLSearchParams(window.location.search).has('recovery') ||
-        new URLSearchParams(window.location.search).has('invite')) {
-        showPasswordUpdateForm();
-        openModal('app-auth-modal');
-        return;
-    }
-
-    const userId = currentUser.id;
-    if (loadedUserId === userId) return;
-    if (loadingUserId === userId) return;
-    loadingUserId = userId;
 
     try {
         await loadSharedData();
-        if (currentUser?.id !== userId) return;
-        loadedUserId = userId;
-        const settingsNav = document.getElementById('settings-nav-item');
-        if (settingsNav) settingsNav.hidden = !isAdmin;
-        const dairyNav = document.getElementById('dairy-nav-item');
-        if (dairyNav) dairyNav.hidden = !isAdmin;
         showSection('dashboard');
-        showToast('Acesso liberado ao LeiTech.', 'success');
         subscribeToSharedData();
         window.addEventListener('focus', refreshSharedData);
     } catch (error) {
         console.error('Supabase data load failed:', error);
-        appUnlocked = false;
-        showToast(`Não foi possível carregar os dados: ${error.message}. Confira o schema e a autorização do usuário no Supabase.`, 'error');
-        await supabaseClient.auth.signOut();
-    } finally {
-        if (loadingUserId === userId) loadingUserId = null;
+        showToast(`Não foi possível carregar os dados: ${error.message}. Confira se as políticas públicas do Supabase foram aplicadas.`, 'error');
     }
 }
 
@@ -473,26 +481,18 @@ function mapDelivery(row) {
 }
 
 async function loadSharedData() {
-    const [authorizationResult, adminResult, producerResult, deliveryResult, settingsResult] = await Promise.all([
-        supabaseClient.rpc('is_authorized_user'),
-        supabaseClient.rpc('is_admin_user'),
+    const [producerResult, deliveryResult, settingsResult] = await Promise.all([
         supabaseClient.from('producers').select('id, name, property, phone').order('name'),
         supabaseClient.from('deliveries').select('id, producer_id, date, liters, price').order('date', { ascending: false }),
         supabaseClient.from('app_settings').select('default_price, dairy_name, company_name').eq('id', 1).maybeSingle()
     ]);
 
-    if (authorizationResult.error) throw authorizationResult.error;
-    if (authorizationResult.data !== true) {
-        throw new Error('Este e-mail não está autorizado. Peça ao administrador para incluí-lo na lista e enviar o convite.');
-    }
-    if (adminResult.error) throw adminResult.error;
     if (producerResult.error) throw producerResult.error;
     if (deliveryResult.error) throw deliveryResult.error;
     if (settingsResult.error) throw settingsResult.error;
 
     producers = producerResult.data.map(mapProducer);
     deliveries = deliveryResult.data.map(mapDelivery);
-    isAdmin = adminResult.data === true;
     if (settingsResult.data) {
         settings = normalizeSettings({
             defaultPrice: settingsResult.data.default_price,
@@ -545,7 +545,7 @@ function scheduleSharedDataRefresh() {
 }
 
 async function refreshSharedData() {
-    if (!currentUser || !supabaseClient) return;
+    if (!supabaseClient) return;
     try {
         await loadSharedData();
     } catch (error) {
@@ -554,34 +554,7 @@ async function refreshSharedData() {
     }
 }
 
-async function logoutApp() {
-    if (!supabaseClient) {
-        showToast('O Supabase não está conectado. Não foi possível encerrar a sessão.', 'error');
-        return;
-    }
-    try {
-        const { error } = await supabaseClient.auth.signOut();
-        if (error) {
-            showToast(`Não foi possível encerrar a sessão: ${error.message}`, 'error');
-            return;
-        }
-    } catch (error) {
-        showToast(`Não foi possível encerrar a sessão: ${error.message}`, 'error');
-        return;
-    }
-    if (sharedDataChannel) {
-        await supabaseClient.removeChannel(sharedDataChannel);
-        sharedDataChannel = null;
-    }
-    window.removeEventListener('focus', refreshSharedData);
-    showToast('Sessão encerrada.', 'info');
-}
-
 function showSection(id) {
-    if (!appUnlocked) {
-        openModal('app-auth-modal');
-        return;
-    }
     if (['settings', 'dairy'].includes(id) && !isAdmin) {
         showToast('Apenas administradores podem acessar essas configurações.', 'error');
         return;
