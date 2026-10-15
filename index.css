@@ -909,13 +909,63 @@ tr:hover td {
 }
 
 .auth-card {
-    max-width: 420px;
+    max-width: 460px;
+}
+
+.auth-card form[hidden],
+.app-container[hidden] {
+    display: none;
 }
 
 .auth-hint {
     margin: 0 0 1rem;
     color: var(--text-muted);
     font-size: 0.86rem;
+}
+
+.auth-actions {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}
+
+.auth-link {
+    border: 0;
+    background: none;
+    color: var(--primary-dark);
+    cursor: pointer;
+    font: inherit;
+    text-decoration: underline;
+}
+
+.auth-link:hover {
+    color: var(--accent-hover);
+}
+
+.auth-recovery-methods {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 0 0 1rem;
+    border: 0;
+}
+
+.auth-recovery-methods legend {
+    margin-bottom: 0.45rem;
+    color: var(--text);
+    font-weight: 600;
+}
+
+.auth-recovery-methods label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.auth-recovery-methods input {
+    accent-color: var(--primary);
 }
 
 .modal-receipt {

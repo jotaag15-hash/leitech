@@ -21,7 +21,141 @@
     <!-- Toast Notification Container -->
     <div id="toast-container" class="toast-container"></div>
 
-    <div class="app-container">
+    <div id="app-auth-modal" class="modal-overlay active">
+        <div class="modal-card auth-card">
+            <div class="modal-header">
+                <h3><i data-lucide="lock-keyhole" class="inline-icon"></i> Acesso ao LeiTech</h3>
+            </div>
+            <p id="auth-description" class="auth-hint">Entre com seu e-mail e senha ou cadastre um novo laticínio.</p>
+
+            <form id="app-auth-form" onsubmit="signInToApp(event)">
+                <div class="form-group">
+                    <label for="auth-email">E-mail de acesso e recuperação</label>
+                    <input type="email" id="auth-email" class="form-control" autocomplete="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="auth-password">Senha</label>
+                    <input type="password" id="auth-password" class="form-control" autocomplete="current-password" required>
+                </div>
+                <div class="auth-actions">
+                    <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+                    <button type="button" class="btn btn-outline btn-block" onclick="showAuthForm('signup')">Cadastrar laticínio</button>
+                    <button type="button" class="auth-link" onclick="showAuthForm('reset')">Esqueci minha senha</button>
+                </div>
+            </form>
+
+            <form id="auth-signup-form" onsubmit="signUpToApp(event)" hidden>
+                <div class="form-group">
+                    <label for="auth-signup-contact">Nome do usuário responsável</label>
+                    <input type="text" id="auth-signup-contact" class="form-control" autocomplete="name" maxlength="120" required>
+                </div>
+                <div class="form-group">
+                    <label for="auth-signup-dairy">Nome do laticínio</label>
+                    <input type="text" id="auth-signup-dairy" class="form-control" autocomplete="organization" maxlength="160" required>
+                </div>
+                <div class="form-group">
+                    <label for="auth-signup-email">E-mail de acesso e recuperação</label>
+                    <input type="email" id="auth-signup-email" class="form-control" autocomplete="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="auth-signup-phone">WhatsApp cadastrado</label>
+                    <input type="tel" id="auth-signup-phone" class="form-control" autocomplete="tel" maxlength="24" required>
+                </div>
+                <div class="form-group">
+                    <label for="auth-signup-password">Senha (8 dígitos)</label>
+                    <input type="password" id="auth-signup-password" class="form-control" autocomplete="new-password" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" title="Informe exatamente 8 números." required>
+                </div>
+                <div class="form-group">
+                    <label for="auth-signup-confirm-password">Confirme a senha</label>
+                    <input type="password" id="auth-signup-confirm-password" class="form-control" autocomplete="new-password" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" title="Informe exatamente 8 números." required>
+                </div>
+                <div class="auth-actions">
+                    <button type="submit" class="btn btn-primary btn-block">Criar conta do laticínio</button>
+                    <button type="button" class="btn btn-outline btn-block" onclick="showAuthForm('login')">Voltar para entrar</button>
+                </div>
+            </form>
+
+            <form id="auth-reset-form" onsubmit="requestPasswordReset(event)" hidden>
+                <fieldset class="auth-recovery-methods">
+                    <legend>Como deseja recuperar?</legend>
+                    <label><input type="radio" name="auth-recovery-method" value="email" checked onchange="togglePasswordRecoveryMethod('email')"> E-mail</label>
+                    <label><input type="radio" name="auth-recovery-method" value="whatsapp" onchange="togglePasswordRecoveryMethod('whatsapp')"> WhatsApp</label>
+                </fieldset>
+                <div class="form-group" id="auth-reset-email-group">
+                    <label for="auth-reset-email">E-mail cadastrado</label>
+                    <input type="email" id="auth-reset-email" class="form-control" autocomplete="email" required>
+                </div>
+                <div class="form-group" id="auth-reset-whatsapp-group" hidden>
+                    <label for="auth-reset-whatsapp-phone">WhatsApp cadastrado</label>
+                    <input type="tel" id="auth-reset-whatsapp-phone" class="form-control" autocomplete="tel" maxlength="24" inputmode="tel" disabled>
+                    <small class="auth-hint">Enviaremos um código de verificação para este número.</small>
+                </div>
+                <div class="auth-actions">
+                    <button type="submit" id="auth-reset-submit" class="btn btn-primary btn-block">Enviar link de recuperação</button>
+                    <button type="button" class="btn btn-outline btn-block" onclick="showAuthForm('login')">Voltar para entrar</button>
+                </div>
+            </form>
+
+            <form id="auth-whatsapp-reset-form" onsubmit="completeWhatsAppPasswordReset(event)" hidden>
+                <p class="auth-hint">Digite o código enviado ao WhatsApp. Se não receber, use a recuperação por e-mail.</p>
+                <div class="form-group">
+                    <label for="auth-whatsapp-reset-phone">WhatsApp cadastrado</label>
+                    <input type="tel" id="auth-whatsapp-reset-phone" class="form-control" autocomplete="tel" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="auth-whatsapp-reset-code">Código de verificação</label>
+                    <input type="text" id="auth-whatsapp-reset-code" class="form-control" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
+                </div>
+                <div class="form-group">
+                    <label for="auth-whatsapp-new-password">Nova senha (8 dígitos)</label>
+                    <input type="password" id="auth-whatsapp-new-password" class="form-control" autocomplete="new-password" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" title="Informe exatamente 8 números." required>
+                </div>
+                <div class="form-group">
+                    <label for="auth-whatsapp-confirm-password">Confirme a nova senha</label>
+                    <input type="password" id="auth-whatsapp-confirm-password" class="form-control" autocomplete="new-password" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" title="Informe exatamente 8 números." required>
+                </div>
+                <div class="auth-actions">
+                    <button type="submit" class="btn btn-primary btn-block">Redefinir senha</button>
+                    <button type="button" class="btn btn-outline btn-block" onclick="showAuthForm('login')">Voltar para entrar</button>
+                </div>
+            </form>
+
+            <form id="auth-password-update-form" onsubmit="updateAccountPassword(event)" hidden>
+                <div class="form-group">
+                    <label for="auth-new-password">Nova senha (8 dígitos)</label>
+                    <input type="password" id="auth-new-password" class="form-control" autocomplete="new-password" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" title="Informe exatamente 8 números." required>
+                </div>
+                <div class="form-group">
+                    <label for="auth-confirm-password">Confirme a nova senha</label>
+                    <input type="password" id="auth-confirm-password" class="form-control" autocomplete="new-password" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" title="Informe exatamente 8 números." required>
+                </div>
+                <div class="auth-actions">
+                    <button type="submit" class="btn btn-primary btn-block">Salvar nova senha</button>
+                </div>
+            </form>
+
+            <form id="auth-setup-form" onsubmit="completeTenantSetup(event)" hidden>
+                <p class="auth-hint">Complete o cadastro para vincular esta conta a um laticínio.</p>
+                <div class="form-group">
+                    <label for="auth-setup-contact">Nome do usuário responsável</label>
+                    <input type="text" id="auth-setup-contact" class="form-control" autocomplete="name" maxlength="120" required>
+                </div>
+                <div class="form-group">
+                    <label for="auth-setup-dairy">Nome do laticínio</label>
+                    <input type="text" id="auth-setup-dairy" class="form-control" autocomplete="organization" maxlength="160" required>
+                </div>
+                <div class="form-group">
+                    <label for="auth-setup-phone">Telefone para contato</label>
+                    <input type="tel" id="auth-setup-phone" class="form-control" autocomplete="tel" maxlength="24" required>
+                </div>
+                <div class="auth-actions">
+                    <button type="submit" class="btn btn-primary btn-block">Concluir cadastro</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-container" id="app-container" hidden>
         <!-- Mobile Overlay -->
         <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="toggleSidebar()"></div>
 
@@ -73,6 +207,9 @@
                     </div>
                 </div>
                 <div class="header-actions">
+                    <button class="btn btn-outline" onclick="logoutApp()">
+                        <i data-lucide="log-out"></i> Sair
+                    </button>
                     <button class="btn btn-primary" onclick="showSection('deliveries')">
                         <i data-lucide="plus"></i> Nova Entrega
                     </button>
@@ -430,10 +567,10 @@
                 <div class="card danger-card">
                     <h3><i data-lucide="alert-triangle" class="inline-icon" style="color: #e74c3c;"></i> Zona de Perigo</h3>
                     <p style="color: var(--text-muted); margin-bottom: 1rem;">
-                        Apagar todos os registros do sistema. Esta ação não pode ser desfeita caso não tenha backup.
+                        Apagar todos os registros deste laticínio. Esta ação não pode ser desfeita caso não tenha backup.
                     </p>
                     <button class="btn btn-danger" onclick="clearAllData()">
-                        <i data-lucide="trash-2"></i> Limpar Todos os Dados do Sistema
+                        <i data-lucide="trash-2"></i> Limpar Dados do Laticínio
                     </button>
                 </div>
             </section>

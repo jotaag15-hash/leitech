@@ -1,4 +1,4 @@
-const CACHE_NAME = 'leitech-v4';
+const CACHE_NAME = 'leitech-v5';
 const ASSETS = [
     './',
     './index.html',

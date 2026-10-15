@@ -4,7 +4,12 @@
 // ==========================================
 
 let supabaseClient;
-let isAdmin = true;
+let currentUser = null;
+let currentTenant = null;
+let loadedUserId = null;
+let loadingUserId = null;
+let isAdmin = false;
+let appUnlocked = false;
 let sharedDataChannel = null;
 let sharedDataRefreshTimer = null;
 let producers = [];
@@ -53,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Start App Directly
     setupEventListeners();
+    setupAuthenticationForms();
     initializeAppAccess();
 });
 
@@ -87,6 +93,7 @@ function setupEventListeners() {
 
             const newProducer = {
                 id: createRecordId(),
+                tenant_id: currentTenant.id,
                 name,
                 property,
                 phone
@@ -181,6 +188,7 @@ function setupEventListeners() {
                 .from('deliveries')
                 .insert({
                     id: newDelivery.id,
+                    tenant_id: currentTenant.id,
                     producer_id: newDelivery.producerId,
                     date: newDelivery.date,
                     liters: newDelivery.liters,
@@ -229,66 +237,78 @@ function setupEventListeners() {
 }
 
 function setupAuthenticationForms() {
-    const authEmail = document.getElementById('auth-email');
-    const authPassword = document.getElementById('auth-password');
-    const resetRequested = new URLSearchParams(window.location.search).has('recovery');
-    const inviteAccepted = new URLSearchParams(window.location.search).has('invite');
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('recovery')) showAuthForm('update-password');
+    ['auth-signup-phone', 'auth-setup-phone', 'auth-reset-whatsapp-phone'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('input', formatContactPhone);
+    });
+    document.querySelectorAll('#auth-signup-password, #auth-signup-confirm-password, #auth-new-password, #auth-confirm-password, #auth-whatsapp-new-password, #auth-whatsapp-confirm-password, #auth-whatsapp-reset-code')
+        .forEach((input) => input.addEventListener('input', (event) => {
+            event.target.value = event.target.value.replace(/\D/g, '').slice(0, event.target.maxLength);
+        }));
+}
 
-    if (resetRequested || inviteAccepted) showPasswordUpdateForm();
-    if (authEmail) authEmail.focus();
-    if (authPassword) {
-        authPassword.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') document.getElementById('app-auth-form')?.requestSubmit();
-        });
+function formatContactPhone(event) {
+    let value = event.target.value.replace(/\D/g, '').slice(0, 11);
+    if (value.length > 10) value = `(${value.slice(0, 2)}) ${value.slice(2, 7)}-${value.slice(7)}`;
+    else if (value.length > 6) value = `(${value.slice(0, 2)}) ${value.slice(2, 6)}-${value.slice(6)}`;
+    else if (value.length > 2) value = `(${value.slice(0, 2)}) ${value.slice(2)}`;
+    else if (value.length > 0) value = `(${value}`;
+    event.target.value = value;
+}
+
+function showAuthForm(mode = 'login') {
+    const forms = {
+        login: 'app-auth-form',
+        signup: 'auth-signup-form',
+        reset: 'auth-reset-form',
+        'whatsapp-reset': 'auth-whatsapp-reset-form',
+        'update-password': 'auth-password-update-form',
+        setup: 'auth-setup-form'
+    };
+    const titles = {
+        login: 'Acesso ao LeiTech',
+        signup: 'Cadastrar novo laticínio',
+        reset: 'Recuperar senha',
+        'whatsapp-reset': 'Redefinir senha pelo WhatsApp',
+        'update-password': 'Definir nova senha',
+        setup: 'Concluir cadastro do laticínio'
+    };
+    const descriptions = {
+        login: 'Entre com seu e-mail e senha ou cadastre um novo laticínio.',
+        signup: 'Crie uma conta com os dados do responsável e do laticínio.',
+        reset: 'Escolha receber um link no e-mail ou um código no WhatsApp cadastrado.',
+        'whatsapp-reset': 'Informe o código enviado ao WhatsApp cadastrado.',
+        'update-password': 'Escolha uma senha nova para acessar sua conta.',
+        setup: 'Complete os dados do laticínio para liberar sua conta.'
+    };
+    Object.entries(forms).forEach(([name, id]) => {
+        const form = document.getElementById(id);
+        if (form) form.hidden = name !== mode;
+    });
+    const title = document.querySelector('#app-auth-modal .modal-header h3');
+    const description = document.getElementById('auth-description');
+    if (title) title.innerText = titles[mode] || titles.login;
+    if (description) description.innerText = descriptions[mode] || descriptions.login;
+    if (mode === 'reset') {
+        document.getElementById('auth-reset-email').value = document.getElementById('auth-email').value.trim();
+        const recoveryPhone = document.getElementById('auth-reset-whatsapp-phone');
+        const signupPhone = document.getElementById('auth-signup-phone').value.trim();
+        const setupPhone = document.getElementById('auth-setup-phone').value.trim();
+        recoveryPhone.value = signupPhone || setupPhone;
+        recoveryPhone.disabled = false;
+        togglePasswordRecoveryMethod(document.querySelector('input[name="auth-recovery-method"]:checked')?.value || 'email');
     }
 }
 
-function showPasswordUpdateForm() {
-    const loginForm = document.getElementById('app-auth-form');
-    const changeForm = document.getElementById('auth-password-change-form');
-    const updateForm = document.getElementById('auth-password-update-form');
-    const changeButton = document.getElementById('auth-change-password');
-    const resetButton = document.getElementById('auth-reset-password');
-    if (loginForm) loginForm.hidden = true;
-    if (changeForm) changeForm.hidden = true;
-    if (updateForm) updateForm.hidden = false;
-    if (changeButton) changeButton.hidden = true;
-    if (resetButton) resetButton.hidden = true;
-    const title = document.querySelector('#app-auth-modal .modal-header h3');
-    if (title) title.innerText = 'Definir nova senha';
-}
-
-function showPasswordChangeForm() {
-    const loginForm = document.getElementById('app-auth-form');
-    const changeForm = document.getElementById('auth-password-change-form');
-    const updateForm = document.getElementById('auth-password-update-form');
-    const changeButton = document.getElementById('auth-change-password');
-    const resetButton = document.getElementById('auth-reset-password');
-    if (loginForm) loginForm.hidden = true;
-    if (changeForm) changeForm.hidden = false;
-    if (updateForm) updateForm.hidden = true;
-    if (changeButton) changeButton.hidden = true;
-    if (resetButton) resetButton.hidden = true;
-    const email = document.getElementById('auth-email')?.value.trim().toLowerCase();
-    const changeEmail = document.getElementById('auth-change-email');
-    if (changeEmail) changeEmail.value = email || '';
-    const title = document.querySelector('#app-auth-modal .modal-header h3');
-    if (title) title.innerText = 'Trocar senha';
-}
-
-function showSignInForm() {
-    const loginForm = document.getElementById('app-auth-form');
-    const changeForm = document.getElementById('auth-password-change-form');
-    const updateForm = document.getElementById('auth-password-update-form');
-    const changeButton = document.getElementById('auth-change-password');
-    const resetButton = document.getElementById('auth-reset-password');
-    if (loginForm) loginForm.hidden = false;
-    if (changeForm) changeForm.hidden = true;
-    if (updateForm) updateForm.hidden = true;
-    if (changeButton) changeButton.hidden = false;
-    if (resetButton) resetButton.hidden = false;
-    const title = document.querySelector('#app-auth-modal .modal-header h3');
-    if (title) title.innerText = 'Acesso ao Sistema';
+function togglePasswordRecoveryMethod(method) {
+    const useWhatsApp = method === 'whatsapp';
+    document.getElementById('auth-reset-email-group').hidden = useWhatsApp;
+    document.getElementById('auth-reset-whatsapp-group').hidden = !useWhatsApp;
+    document.getElementById('auth-reset-email').required = !useWhatsApp;
+    document.getElementById('auth-reset-whatsapp-phone').required = useWhatsApp;
+    document.getElementById('auth-reset-whatsapp-phone').disabled = !useWhatsApp;
+    document.getElementById('auth-reset-submit').textContent = useWhatsApp ? 'Enviar código pelo WhatsApp' : 'Enviar link de recuperação';
 }
 
 function authRedirectUrl(flow) {
@@ -310,57 +330,27 @@ async function signInToApp(event) {
     const password = document.getElementById('auth-password').value;
     try {
         const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if (error) {
-            showToast(`Não foi possível entrar: ${error.message}`, 'error');
-            return;
-        }
-        document.getElementById('auth-password').value = '';
+        if (error) showToast(`Não foi possível entrar: ${error.message}`, 'error');
     } catch (error) {
         showToast(`Não foi possível entrar: ${error.message}`, 'error');
     }
 }
 
-async function requestPasswordReset() {
+async function signUpToApp(event) {
+    event.preventDefault();
     if (!supabaseClient) {
         showToast('O Supabase não está conectado. Verifique a configuração e a conexão com a internet.', 'error');
         return;
     }
-    const email = document.getElementById('auth-email').value.trim().toLowerCase();
-    if (!email) {
-        showToast('Informe seu e-mail para receber o link de recuperação.', 'error');
-        document.getElementById('auth-email').focus();
-        return;
-    }
 
-    try {
-        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-            redirectTo: authRedirectUrl('recovery')
-        });
-        if (error) {
-            showToast(`Não foi possível enviar o link: ${error.message}`, 'error');
-            return;
-        }
-        showToast('Se o e-mail estiver cadastrado, você receberá o link para redefinir a senha.', 'success');
-    } catch (error) {
-        showToast(`Não foi possível enviar o link: ${error.message}`, 'error');
-    }
-}
-
-async function changeAccountPassword(event) {
-    event.preventDefault();
-    const config = window.LEITECH_SUPABASE_CONFIG;
-    const apiKey = config?.publishableKey || config?.anonKey;
-    if (!config?.url || !apiKey || !window.supabase?.createClient) {
-        showToast('O Supabase não está conectado. Verifique a configuração e a conexão com a internet.', 'error');
-        return;
-    }
-
-    const email = document.getElementById('auth-change-email').value.trim().toLowerCase();
-    const currentPassword = document.getElementById('auth-current-password').value;
-    const password = document.getElementById('auth-change-new-password').value;
-    const confirmation = document.getElementById('auth-change-confirm-password').value;
-    if (password.length < 8) {
-        showToast('A senha deve ter pelo menos 8 caracteres.', 'error');
+    const contactName = document.getElementById('auth-signup-contact').value.trim();
+    const dairyName = document.getElementById('auth-signup-dairy').value.trim();
+    const email = document.getElementById('auth-signup-email').value.trim().toLowerCase();
+    const phone = document.getElementById('auth-signup-phone').value.trim();
+    const password = document.getElementById('auth-signup-password').value;
+    const confirmation = document.getElementById('auth-signup-confirm-password').value;
+    if (!/^\d{8}$/.test(password)) {
+        showToast('A senha deve conter exatamente 8 números.', 'error');
         return;
     }
     if (password !== confirmation) {
@@ -369,68 +359,144 @@ async function changeAccountPassword(event) {
     }
 
     try {
-        const passwordClient = window.supabase.createClient(config.url, apiKey, {
-            auth: {
-                autoRefreshToken: false,
-                detectSessionInUrl: false,
-                persistSession: false
+        const { data, error } = await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: {
+                data: { contact_name: contactName, dairy_name: dairyName, phone },
+                emailRedirectTo: authRedirectUrl('welcome')
             }
         });
-        const { error: signInError } = await passwordClient.auth.signInWithPassword({
-            email,
-            password: currentPassword
-        });
-        if (signInError) {
-            showToast(`Não foi possível validar a senha atual: ${signInError.message}`, 'error');
-            return;
-        }
-
-        const { error } = await passwordClient.auth.updateUser({ password });
         if (error) {
-            showToast(`Não foi possível atualizar a senha: ${error.message}`, 'error');
+            showToast(`Não foi possível criar a conta: ${error.message}`, 'error');
             return;
         }
-
-        document.getElementById('auth-password-change-form').reset();
+        if (data.session) {
+            document.getElementById('auth-signup-form').reset();
+            showToast('Conta criada. O laticínio já está configurado.', 'success');
+            return;
+        }
         document.getElementById('auth-email').value = email;
-        showSignInForm();
+        document.getElementById('auth-signup-form').reset();
+        showAuthForm('login');
+        showToast('Cadastro iniciado. Confirme seu e-mail pelo link enviado para ativar a conta.', 'success');
+    } catch (error) {
+        showToast(`Não foi possível criar a conta: ${error.message}`, 'error');
+    }
+}
+
+async function requestPasswordReset(event) {
+    event.preventDefault();
+    if (!supabaseClient) {
+        showToast('O Supabase não está conectado. Verifique a configuração e a conexão com a internet.', 'error');
+        return;
+    }
+    const method = document.querySelector('input[name="auth-recovery-method"]:checked')?.value || 'email';
+    try {
+        if (method === 'whatsapp') {
+            const phone = document.getElementById('auth-reset-whatsapp-phone').value.trim();
+            const { error } = await supabaseClient.functions.invoke('whatsapp-password-recovery', {
+                body: { action: 'request', phone }
+            });
+            if (error) {
+                showToast(`Não foi possível solicitar o código pelo WhatsApp: ${error.message}`, 'error');
+                return;
+            }
+            document.getElementById('auth-whatsapp-reset-phone').value = phone;
+            document.getElementById('auth-reset-form').reset();
+            showAuthForm('whatsapp-reset');
+            showToast('Se o número estiver cadastrado, você receberá um código pelo WhatsApp.', 'success');
+        } else {
+            const email = document.getElementById('auth-reset-email').value.trim().toLowerCase();
+            const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+                redirectTo: authRedirectUrl('recovery')
+            });
+            if (error) {
+                showToast(`Não foi possível enviar o link: ${error.message}`, 'error');
+                return;
+            }
+            showToast('Se o e-mail estiver cadastrado, você receberá o link para redefinir a senha.', 'success');
+        }
+    } catch (error) {
+        showToast(`Não foi possível solicitar a recuperação: ${error.message}`, 'error');
+    }
+}
+
+async function completeWhatsAppPasswordReset(event) {
+    event.preventDefault();
+    const phone = document.getElementById('auth-whatsapp-reset-phone').value.trim();
+    const code = document.getElementById('auth-whatsapp-reset-code').value.trim();
+    const password = document.getElementById('auth-whatsapp-new-password').value;
+    const confirmation = document.getElementById('auth-whatsapp-confirm-password').value;
+    if (!/^\d{8}$/.test(password)) {
+        showToast('A senha deve conter exatamente 8 números.', 'error');
+        return;
+    }
+    if (password !== confirmation) {
+        showToast('As senhas não coincidem.', 'error');
+        return;
+    }
+    try {
+        const { error } = await supabaseClient.functions.invoke('whatsapp-password-recovery', {
+            body: { action: 'complete', phone, code, password }
+        });
+        if (error) {
+            showToast(`Não foi possível redefinir a senha: ${error.message}`, 'error');
+            return;
+        }
+        document.getElementById('auth-whatsapp-reset-form').reset();
+        showAuthForm('login');
         showToast('Senha atualizada. Entre com sua nova senha.', 'success');
     } catch (error) {
-        showToast(`Não foi possível atualizar a senha: ${error.message}`, 'error');
+        showToast(`Não foi possível redefinir a senha: ${error.message}`, 'error');
     }
 }
 
 async function updateAccountPassword(event) {
     event.preventDefault();
-    if (!supabaseClient) {
-        showToast('O Supabase não está conectado. Verifique a configuração e a conexão com a internet.', 'error');
-        return;
-    }
-
     const password = document.getElementById('auth-new-password').value;
     const confirmation = document.getElementById('auth-confirm-password').value;
-    if (password.length < 8) {
-        showToast('A senha deve ter pelo menos 8 caracteres.', 'error');
+    if (!/^\d{8}$/.test(password)) {
+        showToast('A senha deve conter exatamente 8 números.', 'error');
         return;
     }
     if (password !== confirmation) {
         showToast('As senhas não coincidem.', 'error');
         return;
     }
-
     try {
         const { error } = await supabaseClient.auth.updateUser({ password });
         if (error) {
             showToast(`Não foi possível atualizar a senha: ${error.message}`, 'error');
             return;
         }
-
         window.history.replaceState({}, document.title, window.location.pathname);
         document.getElementById('auth-password-update-form').reset();
-        showSignInForm();
-        showToast('Senha atualizada. Você já pode acessar o sistema.', 'success');
+        await supabaseClient.auth.signOut();
+        showAuthForm('login');
+        showToast('Senha atualizada. Entre com sua nova senha.', 'success');
     } catch (error) {
         showToast(`Não foi possível atualizar a senha: ${error.message}`, 'error');
+    }
+}
+
+async function completeTenantSetup(event) {
+    event.preventDefault();
+    try {
+        const { error } = await supabaseClient.rpc('complete_tenant_setup', {
+            p_contact_name: document.getElementById('auth-setup-contact').value.trim(),
+            p_dairy_name: document.getElementById('auth-setup-dairy').value.trim(),
+            p_phone: document.getElementById('auth-setup-phone').value.trim()
+        });
+        if (error) {
+            showToast(`Não foi possível concluir o cadastro: ${error.message}`, 'error');
+            return;
+        }
+        document.getElementById('auth-setup-form').reset();
+        loadedUserId = null;
+        await handleAuthSession('SIGNED_IN', { user: currentUser });
+    } catch (error) {
+        showToast(`Não foi possível concluir o cadastro: ${error.message}`, 'error');
     }
 }
 
@@ -444,20 +510,104 @@ async function initializeAppAccess() {
 
     supabaseClient = window.supabase.createClient(config.url, apiKey, {
         auth: {
-            autoRefreshToken: false,
-            detectSessionInUrl: false,
-            persistSession: false
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            persistSession: true,
+            flowType: 'pkce'
         }
     });
 
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        setTimeout(() => handleAuthSession(event, session), 0);
+    });
+
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) {
+        showToast(`Erro ao recuperar a sessão: ${error.message}`, 'error');
+        return;
+    }
+    await handleAuthSession('INITIAL_SESSION', data.session);
+}
+
+async function handleAuthSession(event, session) {
+    if (event === 'PASSWORD_RECOVERY' || new URLSearchParams(window.location.search).has('recovery')) {
+        appUnlocked = false;
+        document.getElementById('app-container').hidden = true;
+        openModal('app-auth-modal');
+        showAuthForm('update-password');
+        return;
+    }
+
+    currentUser = session?.user || null;
+    appUnlocked = Boolean(currentUser);
+    if (!currentUser) {
+        if (sharedDataChannel) {
+            await supabaseClient.removeChannel(sharedDataChannel);
+            sharedDataChannel = null;
+        }
+        window.removeEventListener('focus', refreshSharedData);
+        loadedUserId = null;
+        loadingUserId = null;
+        currentTenant = null;
+        isAdmin = false;
+        producers = [];
+        deliveries = [];
+        settings = normalizeSettings();
+        document.getElementById('app-container').hidden = true;
+        showAuthForm('login');
+        openModal('app-auth-modal');
+        return;
+    }
+
+    if (loadedUserId === currentUser.id || loadingUserId === currentUser.id) return;
+    loadingUserId = currentUser.id;
     try {
+        const { data: tenant, error } = await supabaseClient
+            .from('tenants')
+            .select('id, dairy_name, contact_name, contact_email, phone')
+            .eq('owner_id', currentUser.id)
+            .maybeSingle();
+        if (error) throw error;
+        if (!tenant) {
+            document.getElementById('app-container').hidden = true;
+            document.getElementById('auth-setup-contact').value = currentUser.user_metadata?.contact_name || '';
+            document.getElementById('auth-setup-dairy').value = currentUser.user_metadata?.dairy_name || '';
+            document.getElementById('auth-setup-phone').value = currentUser.user_metadata?.phone || '';
+            openModal('app-auth-modal');
+            showAuthForm('setup');
+            return;
+        }
+
+        currentTenant = tenant;
+        isAdmin = true;
         await loadSharedData();
+        if (currentUser?.id !== session.user.id) return;
+        loadedUserId = currentUser.id;
+        document.getElementById('app-container').hidden = false;
+        closeModal('app-auth-modal');
+        if (new URLSearchParams(window.location.search).has('welcome')) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
         showSection('dashboard');
         subscribeToSharedData();
         window.addEventListener('focus', refreshSharedData);
     } catch (error) {
         console.error('Supabase data load failed:', error);
-        showToast(`Não foi possível carregar os dados: ${error.message}. Confira se as políticas públicas do Supabase foram aplicadas.`, 'error');
+        document.getElementById('app-container').hidden = true;
+        openModal('app-auth-modal');
+        showAuthForm('login');
+        showToast(`Não foi possível carregar os dados da conta: ${error.message}`, 'error');
+    } finally {
+        if (loadingUserId === session?.user?.id) loadingUserId = null;
+    }
+}
+
+async function logoutApp() {
+    if (!supabaseClient) return;
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) {
+        showToast(`Não foi possível encerrar a sessão: ${error.message}`, 'error');
+        return;
     }
 }
 
@@ -481,10 +631,11 @@ function mapDelivery(row) {
 }
 
 async function loadSharedData() {
+    if (!currentTenant?.id) throw new Error('A conta ainda não está vinculada a um laticínio.');
     const [producerResult, deliveryResult, settingsResult] = await Promise.all([
-        supabaseClient.from('producers').select('id, name, property, phone').order('name'),
-        supabaseClient.from('deliveries').select('id, producer_id, date, liters, price').order('date', { ascending: false }),
-        supabaseClient.from('app_settings').select('default_price, dairy_name, company_name').eq('id', 1).maybeSingle()
+        supabaseClient.from('producers').select('id, name, property, phone').eq('tenant_id', currentTenant.id).order('name'),
+        supabaseClient.from('deliveries').select('id, producer_id, date, liters, price').eq('tenant_id', currentTenant.id).order('date', { ascending: false }),
+        supabaseClient.from('app_settings').select('default_price, dairy_name, company_name').eq('tenant_id', currentTenant.id).maybeSingle()
     ]);
 
     if (producerResult.error) throw producerResult.error;
@@ -545,7 +696,7 @@ function scheduleSharedDataRefresh() {
 }
 
 async function refreshSharedData() {
-    if (!supabaseClient) return;
+    if (!supabaseClient || !currentTenant) return;
     try {
         await loadSharedData();
     } catch (error) {
@@ -555,6 +706,10 @@ async function refreshSharedData() {
 }
 
 function showSection(id) {
+    if (!appUnlocked) {
+        openModal('app-auth-modal');
+        return;
+    }
     if (['settings', 'dairy'].includes(id) && !isAdmin) {
         showToast('Apenas administradores podem acessar essas configurações.', 'error');
         return;
@@ -619,20 +774,35 @@ function renderProducers(filteredList = null) {
             <td>
                 <div class="actions-cell">
                     ${p.phone ? `
-                        <button class="btn-icon whatsapp-icon" title="Enviar WhatsApp" onclick="openDirectWhatsApp('${p.phone}', '${escapeHtml(p.name)}')">
+                        <button class="btn-icon whatsapp-icon" title="Enviar WhatsApp" data-phone="${escapeHtml(p.phone)}" data-name="${escapeHtml(p.name)}">
                             <i data-lucide="message-circle" style="width: 18px; height: 18px;"></i>
                         </button>
                     ` : ''}
-                    <button class="btn-icon edit-icon" title="Editar Produtor" onclick="openEditProducerModal('${p.id}')">
+                    <button class="btn-icon edit-icon" title="Editar Produtor" data-id="${p.id}">
                         <i data-lucide="edit" style="width: 18px; height: 18px;"></i>
                     </button>
-                    <button class="btn-icon delete-icon" title="Excluir Produtor" onclick="deleteProducer('${p.id}')">
+                    <button class="btn-icon delete-icon" title="Excluir Produtor" data-id="${p.id}">
                         <i data-lucide="trash-2" style="width: 18px; height: 18px;"></i>
                     </button>
                 </div>
             </td>
         </tr>
     `).join('');
+
+    list.querySelectorAll('.whatsapp-icon').forEach(button => {
+        button.addEventListener('click', () => {
+            openDirectWhatsApp(button.dataset.phone || '', button.dataset.name || '');
+        });
+    });
+
+    list.querySelectorAll('.edit-icon').forEach(button => {
+        button.addEventListener('click', () => openEditProducerModal(button.dataset.id));
+    });
+
+    list.querySelectorAll('.delete-icon').forEach(button => {
+        button.addEventListener('click', () => deleteProducer(button.dataset.id));
+    });
+
     lucide.createIcons();
 }
 
@@ -1706,7 +1876,7 @@ function importBackupJSON(event) {
                 return;
             }
 
-            if (confirm(`Restaurar backup com ${data.producers.length} produtores e ${data.deliveries.length} entregas? Isso substituirá os dados atuais.`)) {
+            if (confirm(`Restaurar backup com ${data.producers.length} produtores e ${data.deliveries.length} entregas? Isso substituirá os dados deste laticínio.`)) {
                 const restoredSettings = normalizeSettings(data.settings || settings);
                 const { error } = await supabaseClient.rpc('restore_shared_backup', {
                     producers_json: data.producers,
@@ -1789,7 +1959,7 @@ async function clearAllData() {
         showToast('Apenas administradores podem apagar os dados.', 'error');
         return;
     }
-    const confirm1 = confirm('ATENÇÃO: Você tem certeza que deseja APAGAR TODOS os dados de produtores e entregas?');
+    const confirm1 = confirm('ATENÇÃO: Você tem certeza que deseja APAGAR TODOS os dados de produtores e entregas deste laticínio?');
     if (!confirm1) return;
 
     const confirm2 = prompt('Para confirmar a exclusão total, digite LIMPAR abaixo:');
@@ -1806,7 +1976,7 @@ async function clearAllData() {
         renderFortnightSummary();
         updateDashboard();
         populateSelects();
-        showToast('Todos os dados foram apagados.', 'info');
+        showToast('Todos os dados deste laticínio foram apagados.', 'info');
     } else {
         showToast('Ação cancelada.', 'info');
     }
