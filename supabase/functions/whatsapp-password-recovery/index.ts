@@ -183,7 +183,7 @@ Deno.serve(async (request) => {
 
         if (body.action === 'complete') {
             if (typeof body.code !== 'string' || !/^\d{6}$/.test(body.code) ||
-                typeof body.password !== 'string' || !/^\d{8}$/.test(body.password)) {
+                typeof body.password !== 'string' || !/^[a-zA-Z0-9]{8}$/.test(body.password)) {
                 return jsonResponse({ error: 'Código ou senha inválidos.' }, 400, requestOrigin);
             }
 

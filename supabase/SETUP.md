@@ -85,7 +85,7 @@ permissions and row-level security must remain enabled as defined in
 ## Account and data behavior
 
 Each dairy creates an account with a contact name, dairy name, email, WhatsApp
-number, and an eight-digit numeric password. The email is the login. Recovery
+number, and an eight-character password using letters, numbers, or both. The email is the login. Recovery
 can use the registered e-mail link or a one-time code sent to WhatsApp after
 the WhatsApp Cloud API function has been configured and deployed. The
 confirmed account owns a tenant; all producers, deliveries, settings, and

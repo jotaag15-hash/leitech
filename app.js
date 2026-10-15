@@ -242,10 +242,13 @@ function setupAuthenticationForms() {
     ['auth-signup-phone', 'auth-setup-phone', 'auth-reset-whatsapp-phone'].forEach((id) => {
         document.getElementById(id)?.addEventListener('input', formatContactPhone);
     });
-    document.querySelectorAll('#auth-signup-password, #auth-signup-confirm-password, #auth-new-password, #auth-confirm-password, #auth-whatsapp-new-password, #auth-whatsapp-confirm-password, #auth-whatsapp-reset-code')
+    document.querySelectorAll('#auth-signup-password, #auth-signup-confirm-password, #auth-new-password, #auth-confirm-password, #auth-whatsapp-new-password, #auth-whatsapp-confirm-password')
         .forEach((input) => input.addEventListener('input', (event) => {
-            event.target.value = event.target.value.replace(/\D/g, '').slice(0, event.target.maxLength);
+            event.target.value = event.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, event.target.maxLength);
         }));
+    document.getElementById('auth-whatsapp-reset-code')?.addEventListener('input', (event) => {
+        event.target.value = event.target.value.replace(/\D/g, '').slice(0, event.target.maxLength);
+    });
 }
 
 function formatContactPhone(event) {
@@ -349,8 +352,8 @@ async function signUpToApp(event) {
     const phone = document.getElementById('auth-signup-phone').value.trim();
     const password = document.getElementById('auth-signup-password').value;
     const confirmation = document.getElementById('auth-signup-confirm-password').value;
-    if (!/^\d{8}$/.test(password)) {
-        showToast('A senha deve conter exatamente 8 números.', 'error');
+    if (!/^[a-zA-Z0-9]{8}$/.test(password)) {
+        showToast('A senha deve conter exatamente 8 letras e/ou números.', 'error');
         return;
     }
     if (password !== confirmation) {
@@ -428,8 +431,8 @@ async function completeWhatsAppPasswordReset(event) {
     const code = document.getElementById('auth-whatsapp-reset-code').value.trim();
     const password = document.getElementById('auth-whatsapp-new-password').value;
     const confirmation = document.getElementById('auth-whatsapp-confirm-password').value;
-    if (!/^\d{8}$/.test(password)) {
-        showToast('A senha deve conter exatamente 8 números.', 'error');
+    if (!/^[a-zA-Z0-9]{8}$/.test(password)) {
+        showToast('A senha deve conter exatamente 8 letras e/ou números.', 'error');
         return;
     }
     if (password !== confirmation) {
@@ -456,8 +459,8 @@ async function updateAccountPassword(event) {
     event.preventDefault();
     const password = document.getElementById('auth-new-password').value;
     const confirmation = document.getElementById('auth-confirm-password').value;
-    if (!/^\d{8}$/.test(password)) {
-        showToast('A senha deve conter exatamente 8 números.', 'error');
+    if (!/^[a-zA-Z0-9]{8}$/.test(password)) {
+        showToast('A senha deve conter exatamente 8 letras e/ou números.', 'error');
         return;
     }
     if (password !== confirmation) {
